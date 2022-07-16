@@ -131,7 +131,7 @@ A new helper function is defined, which computes RedDSA.GenRandom:
   Inputs:
   - None
 
-  Outputs: randomizer, a Scalar
+  Outputs: randomizer_scalar, a Scalar
 
   def randomizer_generate():
     randomizer_input = random_bytes(64)
@@ -148,13 +148,13 @@ as follows: ::
   - encoded_commitment_list, an encoded commitment list (as computed
     by encode_group_commitment_list)
   - msg, the message to be signed.
-  - randomizer, the randomizer Scalar.
+  - randomizer, public key corresponding to randomizer_scalar, an Element in G.
 
   Outputs: A Scalar representing the binding factor
 
   def compute_binding_factor(encoded_commitment_list, msg, randomizer):
     msg_hash = H3(msg)
-    rho_input = encoded_commitment_list || msg_hash || G.SerializeScalar(randomizer)
+    rho_input = encoded_commitment_list || msg_hash || G.SerializeElement(randomizer)
     binding_factor = H1(rho_input)
     return binding_factor
 
@@ -162,7 +162,7 @@ as follows: ::
 Round Two - Signature Share Generation
 ''''''''''''''''''''''''''''''''''''''
 
-In Round Two, the Coordinator generates a random scalar `randomizer` by calling
+In Round Two, the Coordinator generates a random scalar `randomizer_scalar` by calling
 `randomizer_generate` and sends it to each signer, over a secret channel,
 along with the message and the set of signing commitments. (Note that this differs
 from regular FROST which just requires an authenticated channel.)
@@ -184,13 +184,13 @@ computation of the binding factor. It is specified as the following: ::
     Each element in the list indicates the signer identifier j and their two commitment
     Element values (hiding_nonce_commitment_j, binding_nonce_commitment_j).s
     This list MUST be sorted in ascending order by signer identifier.
-  - randomizer, the randomizer Scalar.
+  - randomizer, public key corresponding to randomizer_scalar, an Element in G.
 
   Outputs: a Scalar value representing the signature share
 
   def sign(identifier, sk_i, group_public_key, nonce_i, msg, commitment_list, randomizer):
     # Compute the randomized group public key
-    randomized_group_public_key = group_public_key + G * randomizer
+    randomized_group_public_key = group_public_key + randomizer
 
     # Encode the commitment list
     encoded_commitments = encode_group_commitment_list(commitment_list)
@@ -238,14 +238,14 @@ as follows: ::
   - group_public_key, public key corresponding to the group signing key,
     an Element in G.
   - msg, the message to be signed.
-  - randomizer, the randomizer Scalar.
+  - randomizer, public key corresponding to randomizer_scalar, an Element in G.
 
   Outputs: True if the signature share is valid, and False otherwise.
 
   def verify_signature_share(identifier, PK_i, comm_i, sig_share_i, commitment_list,
                              group_public_key, msg, randomizer):
     # Compute the randomized group public key
-    randomized_group_public_key = randomizer * group_public_key
+    randomized_group_public_key = group_public_key + randomizer
 
     # Encode the commitment list
     encoded_commitments = encode_group_commitment_list(commitment_list)
@@ -282,18 +282,18 @@ The `aggregate` function is changed to incorporate the randomizer as follows: ::
     of length NUM_SIGNERS, where MIN_SIGNERS <= NUM_SIGNERS <= MAX_SIGNERS.
   - group_public_key, public key corresponding to the group signing key,
   - challenge, the challenge returned by compute_challenge, a Scalar.
-  - randomizer, the randomizer Scalar.
+  - randomizer_scalar, the randomizer Scalar.
 
   Outputs:
   - (R, z), a Schnorr signature consisting of an Element R and Scalar z.
   - randomized_group_public_key, the randomized group public key
 
-  def aggregate(group_commitment, sig_shares, group_public_key, challenge, randomizer):
-    randomized_group_public_key = group_public_key + G * randomizer
+  def aggregate(group_commitment, sig_shares, group_public_key, challenge, randomizer_scalar):
+    randomized_group_public_key = group_public_key + G * randomizer_scalar
     z = 0
     for z_i in sig_shares:
       z = z + z_i
-    return (group_commitment, z + randomizer * challenge), randomized_group_public_key
+    return (group_commitment, z + randomizer_scalar * challenge), randomized_group_public_key
 
 
 Ciphersuites
